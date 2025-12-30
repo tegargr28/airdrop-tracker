@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
+import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from 'firebase/auth';
 import { 
   collection, 
   addDoc, 
@@ -11,7 +12,8 @@ import {
   deleteDoc, 
   doc,
   query,
-  orderBy 
+  orderBy,
+  where
 } from "firebase/firestore";
 
 // Firebase CONFIG
@@ -27,6 +29,8 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app);
+const googleProvider = new GoogleAuthProvider();
 
 type Airdrop = {
   id: string;
@@ -37,9 +41,13 @@ type Airdrop = {
   note: string;
   reward: string;
   createdAt: number;
+  userId: string;
 };
 
 export default function Page() {
+  const [user, setUser] = useState<any>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  
   const [form, setForm] = useState({
     name: "",
     status: "On Going",
@@ -53,13 +61,51 @@ export default function Page() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Check authentication state
   useEffect(() => {
-    loadData();
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setAuthLoading(false);
+      if (currentUser) {
+        loadData(currentUser.uid);
+      } else {
+        setData([]);
+        setIsLoading(false);
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  const loadData = async () => {
+  const handleGoogleLogin = async () => {
     try {
-      const q = query(collection(db, "airdrops"), orderBy("createdAt", "desc"));
+      const result = await signInWithPopup(auth, googleProvider);
+      setUser(result.user);
+      await loadData(result.user.uid);
+    } catch (error) {
+      console.error('Login error:', error);
+      alert('Gagal login. Coba lagi.');
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      setUser(null);
+      setData([]);
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
+
+  const loadData = async (userId: string) => {
+    try {
+      setIsLoading(true);
+      const q = query(
+        collection(db, "airdrops"), 
+        where("userId", "==", userId),
+        orderBy("createdAt", "desc")
+      );
       const querySnapshot = await getDocs(q);
       const airdrops: Airdrop[] = [];
       querySnapshot.forEach((docSnapshot) => {
@@ -74,7 +120,7 @@ export default function Page() {
   };
 
   const addAirdrop = async () => {
-    if (!form.name.trim()) return;
+    if (!form.name.trim() || !user) return;
 
     try {
       const newAirdrop = {
@@ -85,10 +131,11 @@ export default function Page() {
         note: form.note,
         reward: form.reward,
         createdAt: Date.now(),
+        userId: user.uid
       };
 
       await addDoc(collection(db, "airdrops"), newAirdrop);
-      await loadData();
+      await loadData(user.uid);
 
       setForm({
         name: "",
@@ -107,7 +154,7 @@ export default function Page() {
   const updateStatus = async (id: string, newStatus: string) => {
     try {
       await updateDoc(doc(db, "airdrops", id), { status: newStatus });
-      await loadData();
+      if (user) await loadData(user.uid);
     } catch (error) {
       console.error('Error updating status:', error);
     }
@@ -116,7 +163,7 @@ export default function Page() {
   const updateReward = async (id: string, newReward: string) => {
     try {
       await updateDoc(doc(db, "airdrops", id), { reward: newReward });
-      await loadData();
+      if (user) await loadData(user.uid);
       setEditingId(null);
     } catch (error) {
       console.error('Error updating reward:', error);
@@ -127,7 +174,7 @@ export default function Page() {
     if (confirm('Yakin ingin menghapus airdrop ini?')) {
       try {
         await deleteDoc(doc(db, "airdrops", id));
-        await loadData();
+        if (user) await loadData(user.uid);
       } catch (error) {
         console.error('Error deleting airdrop:', error);
       }
@@ -137,10 +184,9 @@ export default function Page() {
   const clearAllData = async () => {
     if (confirm('Yakin ingin menghapus SEMUA data?')) {
       try {
-        const querySnapshot = await getDocs(collection(db, "airdrops"));
-        const deletePromises = querySnapshot.docs.map(d => deleteDoc(d.ref));
+        const deletePromises = data.map(item => deleteDoc(doc(db, "airdrops", item.id)));
         await Promise.all(deletePromises);
-        await loadData();
+        if (user) await loadData(user.uid);
       } catch (error) {
         console.error('Error clearing data:', error);
       }
@@ -152,6 +198,85 @@ export default function Page() {
     return sum + (isNaN(amount) ? 0 : amount);
   }, 0);
 
+  // Login screen
+  if (authLoading) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        backgroundColor: '#000000',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: '#ffffff'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
+          <div>Loading...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        backgroundColor: '#000000',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: '#ffffff',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+      }}>
+        <div style={{ textAlign: 'center', maxWidth: '400px', padding: '24px' }}>
+          <h1 style={{ 
+            fontSize: '42px', 
+            fontWeight: '700',
+            marginBottom: '16px',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            display: 'inline-block'
+          }}>
+            🎈 Airdrop Tracker
+          </h1>
+          <p style={{ color: '#888888', marginBottom: '32px', fontSize: '15px' }}>
+            Track airdrop Anda dengan aman. Data pribadi Anda terlindungi.
+          </p>
+          
+          <button
+            onClick={handleGoogleLogin}
+            style={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: '12px',
+              padding: '16px 32px',
+              fontSize: '16px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              margin: '0 auto'
+            }}
+            onMouseOver={(e) => e.currentTarget.style.opacity = '0.9'}
+            onMouseOut={(e) => e.currentTarget.style.opacity = '1'}
+          >
+            <span style={{ fontSize: '20px' }}>🔐</span>
+            Login dengan Google
+          </button>
+
+          <p style={{ color: '#555555', marginTop: '24px', fontSize: '13px' }}>
+            Setiap user memiliki data pribadi yang terpisah dan aman
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Main app (when logged in)
   if (isLoading) {
     return (
       <div style={{
@@ -164,7 +289,7 @@ export default function Page() {
       }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
-          <div>Loading dari Firebase...</div>
+          <div>Loading data Anda...</div>
         </div>
       </div>
     );
@@ -193,17 +318,35 @@ export default function Page() {
               🎈 CherryHijau_ Airdrop Tracker 
             </h1>
             <p style={{ color: '#888888', fontSize: '14px' }}>
-              ☁️ Data tersimpan di Firebase • 📱 Akses dari HP/Komputer mana saja
+              👋 Hi, {user.displayName} • 🔒 Data pribadi Anda
             </p>
           </div>
           
-          {data.length > 0 && (
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            {data.length > 0 && (
+              <button
+                onClick={clearAllData}
+                style={{
+                  backgroundColor: '#7f1d1d',
+                  color: '#fca5a5',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '10px 20px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                🗑️ Hapus Semua
+              </button>
+            )}
             <button
-              onClick={clearAllData}
+              onClick={handleLogout}
               style={{
-                backgroundColor: '#7f1d1d',
-                color: '#fca5a5',
-                border: 'none',
+                backgroundColor: '#1a1a1a',
+                color: '#888888',
+                border: '1px solid #2a2a2a',
                 borderRadius: '8px',
                 padding: '10px 20px',
                 fontSize: '14px',
@@ -211,10 +354,18 @@ export default function Page() {
                 cursor: 'pointer',
                 transition: 'all 0.2s'
               }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.backgroundColor = '#2a2a2a';
+                e.currentTarget.style.color = '#ffffff';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.backgroundColor = '#1a1a1a';
+                e.currentTarget.style.color = '#888888';
+              }}
             >
-              🗑️ Hapus Semua
+              🚪 Logout
             </button>
-          )}
+          </div>
         </div>
 
         <div style={{
