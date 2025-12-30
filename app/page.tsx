@@ -1,65 +1,553 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useState, useEffect } from "react";
+import { initializeApp } from 'firebase/app';
+import { getFirestore } from 'firebase/firestore';
+import { 
+  collection, 
+  addDoc, 
+  getDocs, 
+  updateDoc, 
+  deleteDoc, 
+  doc,
+  query,
+  orderBy 
+} from "firebase/firestore";
+
+// Firebase CONFIG
+const firebaseConfig = {
+  apiKey: "AIzaSyAiaWp1r2JYm5jGZdEbkzXR5Cs4_f5SR-0",
+  authDomain: "airdrop-trackertgr.firebaseapp.com",
+  projectId: "airdrop-trackertgr",
+  storageBucket: "airdrop-trackertgr.firebasestorage.app",
+  messagingSenderId: "898934999910",
+  appId: "1:898934999910:web:ab2a530165bf206aaa96a7"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+type Airdrop = {
+  id: string;
+  name: string;
+  status: string;
+  task: string;
+  deadline: string;
+  note: string;
+  reward: string;
+  createdAt: number;
+};
+
+export default function Page() {
+  const [form, setForm] = useState({
+    name: "",
+    status: "On Going",
+    task: "",
+    deadline: "",
+    note: "",
+    reward: "",
+  });
+
+  const [data, setData] = useState<Airdrop[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const q = query(collection(db, "airdrops"), orderBy("createdAt", "desc"));
+      const querySnapshot = await getDocs(q);
+      const airdrops: Airdrop[] = [];
+      querySnapshot.forEach((docSnapshot) => {
+        airdrops.push({ id: docSnapshot.id, ...docSnapshot.data() } as Airdrop);
+      });
+      setData(airdrops);
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const addAirdrop = async () => {
+    if (!form.name.trim()) return;
+
+    try {
+      const newAirdrop = {
+        name: form.name,
+        status: form.status,
+        task: form.task,
+        deadline: form.deadline,
+        note: form.note,
+        reward: form.reward,
+        createdAt: Date.now(),
+      };
+
+      await addDoc(collection(db, "airdrops"), newAirdrop);
+      await loadData();
+
+      setForm({
+        name: "",
+        status: "On Going",
+        task: "",
+        deadline: "",
+        note: "",
+        reward: "",
+      });
+    } catch (error) {
+      console.error('Error adding airdrop:', error);
+      alert('Error: ' + error);
+    }
+  };
+
+  const updateStatus = async (id: string, newStatus: string) => {
+    try {
+      await updateDoc(doc(db, "airdrops", id), { status: newStatus });
+      await loadData();
+    } catch (error) {
+      console.error('Error updating status:', error);
+    }
+  };
+
+  const updateReward = async (id: string, newReward: string) => {
+    try {
+      await updateDoc(doc(db, "airdrops", id), { reward: newReward });
+      await loadData();
+      setEditingId(null);
+    } catch (error) {
+      console.error('Error updating reward:', error);
+    }
+  };
+
+  const deleteAirdrop = async (id: string) => {
+    if (confirm('Yakin ingin menghapus airdrop ini?')) {
+      try {
+        await deleteDoc(doc(db, "airdrops", id));
+        await loadData();
+      } catch (error) {
+        console.error('Error deleting airdrop:', error);
+      }
+    }
+  };
+
+  const clearAllData = async () => {
+    if (confirm('Yakin ingin menghapus SEMUA data?')) {
+      try {
+        const querySnapshot = await getDocs(collection(db, "airdrops"));
+        const deletePromises = querySnapshot.docs.map(d => deleteDoc(d.ref));
+        await Promise.all(deletePromises);
+        await loadData();
+      } catch (error) {
+        console.error('Error clearing data:', error);
+      }
+    }
+  };
+
+  const totalReward = data.reduce((sum, item) => {
+    const amount = parseFloat(item.reward.replace(/[^0-9.-]/g, ''));
+    return sum + (isNaN(amount) ? 0 : amount);
+  }, 0);
+
+  if (isLoading) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        backgroundColor: '#000000',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: '#ffffff'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
+          <div>Loading dari Firebase...</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+    <div style={{ 
+      minHeight: '100vh', 
+      backgroundColor: '#000000',
+      color: '#ffffff',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+    }}>
+      <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '40px 24px' }}>
+        
+        <div style={{ marginBottom: '48px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+          <div>
+            <h1 style={{ 
+              fontSize: '42px', 
+              fontWeight: '700',
+              marginBottom: '8px',
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              display: 'inline-block'
+            }}>
+              🎈 CherryHijau_ Airdrop Tracker 
+            </h1>
+            <p style={{ color: '#888888', fontSize: '14px' }}>
+              ☁️ Data tersimpan di Firebase • 📱 Akses dari HP/Komputer mana saja
+            </p>
+          </div>
+          
+          {data.length > 0 && (
+            <button
+              onClick={clearAllData}
+              style={{
+                backgroundColor: '#7f1d1d',
+                color: '#fca5a5',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '10px 20px',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+              🗑️ Hapus Semua
+            </button>
+          )}
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+
+        <div style={{
+          backgroundColor: '#0a0a0a',
+          border: '1px solid #1a1a1a',
+          borderRadius: '16px',
+          padding: '32px',
+          marginBottom: '32px',
+          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.3)'
+        }}>
+          <h2 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '24px', color: '#ffffff' }}>
+            ✨ Tambah Airdrop Baru
+          </h2>
+
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+            gap: '16px',
+            marginBottom: '16px'
+          }}>
+            <input
+              placeholder="Nama Project"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              style={{
+                backgroundColor: '#141414',
+                color: '#ffffff',
+                border: '1px solid #2a2a2a',
+                borderRadius: '10px',
+                padding: '14px 16px',
+                fontSize: '15px',
+                outline: 'none',
+              }}
+              onFocus={(e) => e.target.style.borderColor = '#667eea'}
+              onBlur={(e) => e.target.style.borderColor = '#2a2a2a'}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+
+            <select
+              value={form.status}
+              onChange={(e) => setForm({ ...form, status: e.target.value })}
+              style={{
+                backgroundColor: '#141414',
+                color: '#ffffff',
+                border: '1px solid #2a2a2a',
+                borderRadius: '10px',
+                padding: '14px 16px',
+                fontSize: '15px',
+                outline: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              <option style={{ backgroundColor: '#141414' }}>On Going</option>
+              <option style={{ backgroundColor: '#141414' }}>Done</option>
+              <option style={{ backgroundColor: '#141414' }}>Dropped</option>
+            </select>
+
+            <input
+              placeholder="Task"
+              value={form.task}
+              onChange={(e) => setForm({ ...form, task: e.target.value })}
+              style={{
+                backgroundColor: '#141414',
+                color: '#ffffff',
+                border: '1px solid #2a2a2a',
+                borderRadius: '10px',
+                padding: '14px 16px',
+                fontSize: '15px',
+                outline: 'none'
+              }}
+              onFocus={(e) => e.target.style.borderColor = '#667eea'}
+              onBlur={(e) => e.target.style.borderColor = '#2a2a2a'}
+            />
+
+            <input
+              placeholder="Deadline"
+              value={form.deadline}
+              onChange={(e) => setForm({ ...form, deadline: e.target.value })}
+              style={{
+                backgroundColor: '#141414',
+                color: '#ffffff',
+                border: '1px solid #2a2a2a',
+                borderRadius: '10px',
+                padding: '14px 16px',
+                fontSize: '15px',
+                outline: 'none'
+              }}
+              onFocus={(e) => e.target.style.borderColor = '#667eea'}
+              onBlur={(e) => e.target.style.borderColor = '#2a2a2a'}
+            />
+
+            <input
+              placeholder="Reward (500 USDT)"
+              value={form.reward}
+              onChange={(e) => setForm({ ...form, reward: e.target.value })}
+              style={{
+                backgroundColor: '#141414',
+                color: '#ffffff',
+                border: '1px solid #2a2a2a',
+                borderRadius: '10px',
+                padding: '14px 16px',
+                fontSize: '15px',
+                outline: 'none'
+              }}
+              onFocus={(e) => e.target.style.borderColor = '#667eea'}
+              onBlur={(e) => e.target.style.borderColor = '#2a2a2a'}
+            />
+          </div>
+
+          <textarea
+            placeholder="Catatan tambahan..."
+            value={form.note}
+            onChange={(e) => setForm({ ...form, note: e.target.value })}
+            rows={2}
+            style={{
+              width: '100%',
+              backgroundColor: '#141414',
+              color: '#ffffff',
+              border: '1px solid #2a2a2a',
+              borderRadius: '10px',
+              padding: '14px 16px',
+              fontSize: '15px',
+              outline: 'none',
+              resize: 'vertical',
+              marginBottom: '16px',
+              fontFamily: 'inherit'
+            }}
+            onFocus={(e) => e.target.style.borderColor = '#667eea'}
+            onBlur={(e) => e.target.style.borderColor = '#2a2a2a'}
+          />
+
+          <button
+            onClick={addAirdrop}
+            style={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: '10px',
+              padding: '14px 32px',
+              fontSize: '15px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              width: '100%'
+            }}
+            onMouseOver={(e) => e.currentTarget.style.opacity = '0.9'}
+            onMouseOut={(e) => e.currentTarget.style.opacity = '1'}
           >
-            Documentation
-          </a>
+            ➕ Tambah Airdrop
+          </button>
         </div>
-      </main>
+
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: '16px',
+          marginBottom: '32px'
+        }}>
+          <div style={{
+            backgroundColor: '#0a0a0a',
+            border: '1px solid #1a1a1a',
+            borderRadius: '12px',
+            padding: '20px',
+          }}>
+            <div style={{ color: '#888888', fontSize: '13px', marginBottom: '4px' }}>Total Airdrop</div>
+            <div style={{ fontSize: '32px', fontWeight: '700' }}>{data.length}</div>
+          </div>
+          <div style={{
+            backgroundColor: '#0a0a0a',
+            border: '1px solid #1a1a1a',
+            borderRadius: '12px',
+            padding: '20px',
+          }}>
+            <div style={{ color: '#888888', fontSize: '13px', marginBottom: '4px' }}>On Going</div>
+            <div style={{ fontSize: '32px', fontWeight: '700', color: '#3b82f6' }}>
+              {data.filter(d => d.status === 'On Going').length}
+            </div>
+          </div>
+          <div style={{
+            backgroundColor: '#0a0a0a',
+            border: '1px solid #1a1a1a',
+            borderRadius: '12px',
+            padding: '20px',
+          }}>
+            <div style={{ color: '#888888', fontSize: '13px', marginBottom: '4px' }}>Done</div>
+            <div style={{ fontSize: '32px', fontWeight: '700', color: '#10b981' }}>
+              {data.filter(d => d.status === 'Done').length}
+            </div>
+          </div>
+          <div style={{
+            backgroundColor: '#0a0a0a',
+            border: '1px solid #1a1a1a',
+            borderRadius: '12px',
+            padding: '20px',
+          }}>
+            <div style={{ color: '#888888', fontSize: '13px', marginBottom: '4px' }}>💰 Total Reward</div>
+            <div style={{ fontSize: '28px', fontWeight: '700', color: '#fbbf24' }}>
+              {totalReward > 0 ? `$${totalReward.toFixed(2)}` : '-'}
+            </div>
+          </div>
+        </div>
+
+        <div style={{
+          backgroundColor: '#0a0a0a',
+          border: '1px solid #1a1a1a',
+          borderRadius: '16px',
+          overflow: 'hidden'
+        }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '900px' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#141414' }}>
+                  <th style={{ padding: '16px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: '#888888', textTransform: 'uppercase' }}>Nama</th>
+                  <th style={{ padding: '16px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: '#888888', textTransform: 'uppercase' }}>Status</th>
+                  <th style={{ padding: '16px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: '#888888', textTransform: 'uppercase' }}>Task</th>
+                  <th style={{ padding: '16px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: '#888888', textTransform: 'uppercase' }}>Deadline</th>
+                  <th style={{ padding: '16px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: '#888888', textTransform: 'uppercase' }}>💰 Reward</th>
+                  <th style={{ padding: '16px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: '#888888', textTransform: 'uppercase' }}>Catatan</th>
+                  <th style={{ padding: '16px', textAlign: 'center', fontSize: '13px', fontWeight: '600', color: '#888888', textTransform: 'uppercase' }}>Aksi</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((item) => (
+                  <tr
+                    key={item.id}
+                    style={{
+                      borderTop: '1px solid #1a1a1a',
+                      transition: 'background-color 0.2s'
+                    }}
+                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#141414'}
+                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                  >
+                    <td style={{ padding: '16px', fontWeight: '600', fontSize: '15px' }}>{item.name}</td>
+                    <td style={{ padding: '16px' }}>
+                      <select
+                        value={item.status}
+                        onChange={(e) => updateStatus(item.id, e.target.value)}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: '20px',
+                          fontSize: '13px',
+                          fontWeight: '600',
+                          backgroundColor: item.status === 'On Going' ? '#1e3a8a' : item.status === 'Done' ? '#065f46' : '#7f1d1d',
+                          color: item.status === 'On Going' ? '#93c5fd' : item.status === 'Done' ? '#6ee7b7' : '#fca5a5',
+                          border: 'none',
+                          cursor: 'pointer',
+                          outline: 'none'
+                        }}
+                      >
+                        <option value="On Going" style={{ backgroundColor: '#141414' }}>On Going</option>
+                        <option value="Done" style={{ backgroundColor: '#141414' }}>Done</option>
+                        <option value="Dropped" style={{ backgroundColor: '#141414' }}>Dropped</option>
+                      </select>
+                    </td>
+                    <td style={{ padding: '16px', color: '#cccccc' }}>{item.task}</td>
+                    <td style={{ padding: '16px', color: '#cccccc' }}>{item.deadline}</td>
+                    <td style={{ padding: '16px' }}>
+                      {editingId === item.id ? (
+                        <input
+                          autoFocus
+                          defaultValue={item.reward}
+                          onBlur={(e) => updateReward(item.id, e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              updateReward(item.id, e.currentTarget.value);
+                            }
+                          }}
+                          style={{
+                            backgroundColor: '#141414',
+                            color: '#fbbf24',
+                            border: '1px solid #667eea',
+                            borderRadius: '6px',
+                            padding: '6px 10px',
+                            fontSize: '14px',
+                            width: '120px',
+                            outline: 'none'
+                          }}
+                        />
+                      ) : (
+                        <div
+                          onClick={() => setEditingId(item.id)}
+                          style={{
+                            color: item.reward ? '#fbbf24' : '#555555',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            fontSize: '14px'
+                          }}
+                        >
+                          {item.reward || 'Klik untuk isi'}
+                        </div>
+                      )}
+                    </td>
+                    <td style={{ padding: '16px', color: '#888888', fontSize: '14px', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.note}</td>
+                    <td style={{ padding: '16px', textAlign: 'center' }}>
+                      <button
+                        onClick={() => deleteAirdrop(item.id)}
+                        style={{
+                          backgroundColor: 'transparent',
+                          color: '#888888',
+                          border: 'none',
+                          borderRadius: '6px',
+                          padding: '6px 12px',
+                          fontSize: '18px',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s'
+                        }}
+                        onMouseOver={(e) => {
+                          e.currentTarget.style.backgroundColor = '#7f1d1d';
+                          e.currentTarget.style.color = '#fca5a5';
+                        }}
+                        onMouseOut={(e) => {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                          e.currentTarget.style.color = '#888888';
+                        }}
+                      >
+                        🗑️
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {data.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: '#555555' }}>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔭</div>
+            <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>Belum ada airdrop</div>
+            <div style={{ fontSize: '14px' }}>Tambahkan airdrop pertama Anda di form di atas</div>
+          </div>
+        )}
+
+      </div>
     </div>
   );
 }

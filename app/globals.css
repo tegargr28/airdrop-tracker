@@ -1,26 +1,41 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+* {
+  box-sizing: border-box;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+input,
+textarea,
+select {
+  background-color: #171717 !important; /* neutral-900 - lebih terang */
+  color: #e5e5e5 !important;
+  border: 1px solid #404040 !important; /* neutral-700 - lebih terang */
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+input:focus,
+textarea:focus,
+select:focus {
+  outline: 2px solid #3b82f6; /* blue-500 */
+  outline-offset: 0px;
+  border-color: #3b82f6;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+input::placeholder,
+textarea::placeholder {
+  color: #737373 !important; /* neutral-500 */
+}
+
+/* Dropdown options */
+option {
+  background-color: #171717 !important;
+  color: #e5e5e5 !important;
+}
+
+/* Untuk memastikan select dropdown terlihat */
+select {
+  appearance: auto;
+  -webkit-appearance: auto;
+  -moz-appearance: auto;
 }
