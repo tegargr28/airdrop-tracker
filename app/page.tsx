@@ -1,552 +1,629 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from "react";
-import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
-import { 
-  collection, 
-  addDoc, 
-  getDocs, 
-  updateDoc, 
-  deleteDoc, 
-  doc,
-  query,
-  orderBy 
-} from "firebase/firestore";
+import React, { useState, useEffect } from 'react';
+import { Trash2, Plus, ExternalLink, Award, TrendingUp, Users, Calendar } from 'lucide-react';
 
-// Firebase CONFIG
-const firebaseConfig = {
-  apiKey: "AIzaSyAiaWp1r2JYm5jGZdEbkzXR5Cs4_f5SR-0",
-  authDomain: "airdrop-trackertgr.firebaseapp.com",
-  projectId: "airdrop-trackertgr",
-  storageBucket: "airdrop-trackertgr.firebasestorage.app",
-  messagingSenderId: "898934999910",
-  appId: "1:898934999910:web:ab2a530165bf206aaa96a7"
-};
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-
-type Airdrop = {
-  id: string;
-  name: string;
-  status: string;
-  task: string;
-  deadline: string;
-  note: string;
-  reward: string;
-  createdAt: number;
-};
-
-export default function Page() {
-  const [form, setForm] = useState({
-    name: "",
-    status: "On Going",
-    task: "",
-    deadline: "",
-    note: "",
-    reward: "",
+export default function BaseAirdropTracker() {
+  const [data, setData] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    category: 'DeFi',
+    status: 'Active',
+    reward: '',
+    deadline: '',
+    url: ''
   });
-
-  const [data, setData] = useState<Airdrop[]>([]);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     loadData();
   }, []);
 
-  const loadData = async () => {
+  const loadData = () => {
     try {
-      const q = query(collection(db, "airdrops"), orderBy("createdAt", "desc"));
-      const querySnapshot = await getDocs(q);
-      const airdrops: Airdrop[] = [];
-      querySnapshot.forEach((docSnapshot) => {
-        airdrops.push({ id: docSnapshot.id, ...docSnapshot.data() } as Airdrop);
-      });
-      setData(airdrops);
-    } catch (error) {
-      console.error('Error loading data:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const addAirdrop = async () => {
-    if (!form.name.trim()) return;
-
-    try {
-      const newAirdrop = {
-        name: form.name,
-        status: form.status,
-        task: form.task,
-        deadline: form.deadline,
-        note: form.note,
-        reward: form.reward,
-        createdAt: Date.now(),
-      };
-
-      await addDoc(collection(db, "airdrops"), newAirdrop);
-      await loadData();
-
-      setForm({
-        name: "",
-        status: "On Going",
-        task: "",
-        deadline: "",
-        note: "",
-        reward: "",
-      });
-    } catch (error) {
-      console.error('Error adding airdrop:', error);
-      alert('Error: ' + error);
-    }
-  };
-
-  const updateStatus = async (id: string, newStatus: string) => {
-    try {
-      await updateDoc(doc(db, "airdrops", id), { status: newStatus });
-      await loadData();
-    } catch (error) {
-      console.error('Error updating status:', error);
-    }
-  };
-
-  const updateReward = async (id: string, newReward: string) => {
-    try {
-      await updateDoc(doc(db, "airdrops", id), { reward: newReward });
-      await loadData();
-      setEditingId(null);
-    } catch (error) {
-      console.error('Error updating reward:', error);
-    }
-  };
-
-  const deleteAirdrop = async (id: string) => {
-    if (confirm('Yakin ingin menghapus airdrop ini?')) {
-      try {
-        await deleteDoc(doc(db, "airdrops", id));
-        await loadData();
-      } catch (error) {
-        console.error('Error deleting airdrop:', error);
+      const saved = localStorage.getItem('airdrops');
+      if (saved) {
+        setData(JSON.parse(saved));
       }
+    } catch (error) {
+      console.log('Loading data:', error);
     }
   };
 
-  const clearAllData = async () => {
-    if (confirm('Yakin ingin menghapus SEMUA data?')) {
-      try {
-        const querySnapshot = await getDocs(collection(db, "airdrops"));
-        const deletePromises = querySnapshot.docs.map(d => deleteDoc(d.ref));
-        await Promise.all(deletePromises);
-        await loadData();
-      } catch (error) {
-        console.error('Error clearing data:', error);
-      }
+  const addAirdrop = () => {
+    if (!formData.name) return;
+    
+    try {
+      const id = `airdrop-${Date.now()}`;
+      const newItem = { ...formData, id, createdAt: new Date().toISOString() };
+      const updatedData = [...data, newItem];
+      setData(updatedData);
+      localStorage.setItem('airdrops', JSON.stringify(updatedData));
+      setFormData({ name: '', category: 'DeFi', status: 'Active', reward: '', deadline: '', url: '' });
+      setShowForm(false);
+    } catch (error) {
+      console.error('Error adding:', error);
     }
   };
 
-  const totalReward = data.reduce((sum, item) => {
-    const amount = parseFloat(item.reward.replace(/[^0-9.-]/g, ''));
-    return sum + (isNaN(amount) ? 0 : amount);
-  }, 0);
+  const deleteAirdrop = (id) => {
+    try {
+      const updatedData = data.filter(item => item.id !== id);
+      setData(updatedData);
+      localStorage.setItem('airdrops', JSON.stringify(updatedData));
+    } catch (error) {
+      console.error('Error deleting:', error);
+    }
+  };
 
-  if (isLoading) {
-    return (
-      <div style={{
-        minHeight: '100vh',
-        backgroundColor: '#000000',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: '#ffffff'
-      }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
-          <div>Loading dari Firebase...</div>
-        </div>
-      </div>
-    );
-  }
+  const clearAllData = () => {
+    if (!confirm('Delete all airdrops?')) return;
+    try {
+      setData([]);
+      localStorage.removeItem('airdrops');
+    } catch (error) {
+      console.error('Error clearing:', error);
+    }
+  };
+
+  const stats = {
+    total: data.length,
+    active: data.filter(d => d.status === 'Active').length,
+    completed: data.filter(d => d.status === 'Completed').length
+  };
+
+  const categoryColors = {
+    DeFi: { bg: '#1e3a8a', text: '#93c5fd', border: '#3b82f6' },
+    NFT: { bg: '#581c87', text: '#e9d5ff', border: '#a855f7' },
+    Gaming: { bg: '#14532d', text: '#86efac', border: '#22c55e' },
+    Social: { bg: '#7c2d12', text: '#fdba74', border: '#f97316' },
+    Infrastructure: { bg: '#1e293b', text: '#94a3b8', border: '#64748b' }
+  };
 
   return (
-    <div style={{ 
-      minHeight: '100vh', 
-      backgroundColor: '#000000',
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(to bottom, #000000 0%, #0a0a0a 100%)',
       color: '#ffffff',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+      padding: '24px'
     }}>
-      <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '40px 24px' }}>
+      <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
         
-        <div style={{ marginBottom: '48px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-          <div>
-            <h1 style={{ 
-              fontSize: '42px', 
-              fontWeight: '700',
-              marginBottom: '8px',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              display: 'inline-block'
-            }}>
-              🎈 CherryHijau_ Airdrop Tracker 
-            </h1>
-            <p style={{ color: '#888888', fontSize: '14px' }}>
-              ☁️ Data tersimpan di Firebase • 📱 Akses dari HP/Komputer mana saja
-            </p>
+        {/* Header */}
+        <div style={{ marginBottom: '48px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '24px' }}>
+            <div style={{ flex: 1, minWidth: '300px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                <div style={{
+                  width: '48px',
+                  height: '48px',
+                  background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+                  borderRadius: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '24px'
+                }}>
+                  🔵
+                </div>
+                <h1 style={{
+                  fontSize: '36px',
+                  fontWeight: '800',
+                  background: 'linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  margin: 0
+                }}>
+                  Base Airdrop Tracker
+                </h1>
+              </div>
+
+              <p style={{ color: '#9ca3af', fontSize: '15px', marginBottom: '16px', lineHeight: '1.6' }}>
+                Track Web3 opportunities and Base ecosystem campaigns with ease
+              </p>
+
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
+                <span style={{
+                  background: 'rgba(59, 130, 246, 0.1)',
+                  color: '#60a5fa',
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  border: '1px solid rgba(59, 130, 246, 0.2)'
+                }}>
+                  Base Ecosystem
+                </span>
+                <span style={{
+                  background: 'rgba(168, 85, 247, 0.1)',
+                  color: '#c084fc',
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  border: '1px solid rgba(168, 85, 247, 0.2)'
+                }}>
+                  Web3 Frontend
+                </span>
+                <span style={{
+                  background: 'rgba(34, 197, 94, 0.1)',
+                  color: '#4ade80',
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  border: '1px solid rgba(34, 197, 94, 0.2)'
+                }}>
+                  Open Source
+                </span>
+              </div>
+
+              <p style={{ color: '#6b7280', fontSize: '13px', margin: 0 }}>
+                Built by <span style={{ color: '#3b82f6', fontWeight: 600 }}>Jhontaslim</span> for Top Base Builders: January
+              </p>
+            </div>
+
+            {/* Stats Cards */}
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(29, 78, 216, 0.05) 100%)',
+                border: '1px solid rgba(59, 130, 246, 0.2)',
+                borderRadius: '12px',
+                padding: '16px 20px',
+                minWidth: '120px'
+              }}>
+                <div style={{ fontSize: '24px', fontWeight: '700', color: '#60a5fa', marginBottom: '4px' }}>
+                  {stats.total}
+                </div>
+                <div style={{ fontSize: '12px', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Total
+                </div>
+              </div>
+
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(22, 163, 74, 0.05) 100%)',
+                border: '1px solid rgba(34, 197, 94, 0.2)',
+                borderRadius: '12px',
+                padding: '16px 20px',
+                minWidth: '120px'
+              }}>
+                <div style={{ fontSize: '24px', fontWeight: '700', color: '#4ade80', marginBottom: '4px' }}>
+                  {stats.active}
+                </div>
+                <div style={{ fontSize: '12px', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Active
+                </div>
+              </div>
+
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(148, 163, 184, 0.1) 0%, rgba(100, 116, 139, 0.05) 100%)',
+                border: '1px solid rgba(148, 163, 184, 0.2)',
+                borderRadius: '12px',
+                padding: '16px 20px',
+                minWidth: '120px'
+              }}>
+                <div style={{ fontSize: '24px', fontWeight: '700', color: '#94a3b8', marginBottom: '4px' }}>
+                  {stats.completed}
+                </div>
+                <div style={{ fontSize: '12px', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Completed
+                </div>
+              </div>
+            </div>
           </div>
-          
+        </div>
+
+        {/* Action Buttons */}
+        <div style={{ display: 'flex', gap: '12px', marginBottom: '32px', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => setShowForm(!showForm)}
+            style={{
+              background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: '10px',
+              padding: '12px 24px',
+              fontSize: '14px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)',
+              transition: 'all 0.2s'
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 6px 16px rgba(59, 130, 246, 0.4)';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.3)';
+            }}
+          >
+            <Plus size={18} />
+            Add Airdrop
+          </button>
+
           {data.length > 0 && (
             <button
               onClick={clearAllData}
               style={{
-                backgroundColor: '#7f1d1d',
-                color: '#fca5a5',
-                border: 'none',
-                borderRadius: '8px',
-                padding: '10px 20px',
+                background: 'rgba(239, 68, 68, 0.1)',
+                color: '#f87171',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '10px',
+                padding: '12px 24px',
                 fontSize: '14px',
                 fontWeight: '600',
                 cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
                 transition: 'all 0.2s'
               }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+              }}
             >
-              🗑️ Hapus Semua
+              <Trash2 size={18} />
+              Clear All
             </button>
           )}
         </div>
 
-        <div style={{
-          backgroundColor: '#0a0a0a',
-          border: '1px solid #1a1a1a',
-          borderRadius: '16px',
-          padding: '32px',
-          marginBottom: '32px',
-          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.3)'
-        }}>
-          <h2 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '24px', color: '#ffffff' }}>
-            ✨ Tambah Airdrop Baru
-          </h2>
-
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-            gap: '16px',
-            marginBottom: '16px'
-          }}>
-            <input
-              placeholder="Nama Project"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              style={{
-                backgroundColor: '#141414',
-                color: '#ffffff',
-                border: '1px solid #2a2a2a',
-                borderRadius: '10px',
-                padding: '14px 16px',
-                fontSize: '15px',
-                outline: 'none',
-              }}
-              onFocus={(e) => e.target.style.borderColor = '#667eea'}
-              onBlur={(e) => e.target.style.borderColor = '#2a2a2a'}
-            />
-
-            <select
-              value={form.status}
-              onChange={(e) => setForm({ ...form, status: e.target.value })}
-              style={{
-                backgroundColor: '#141414',
-                color: '#ffffff',
-                border: '1px solid #2a2a2a',
-                borderRadius: '10px',
-                padding: '14px 16px',
-                fontSize: '15px',
-                outline: 'none',
-                cursor: 'pointer'
-              }}
-            >
-              <option style={{ backgroundColor: '#141414' }}>On Going</option>
-              <option style={{ backgroundColor: '#141414' }}>Done</option>
-              <option style={{ backgroundColor: '#141414' }}>Dropped</option>
-            </select>
-
-            <input
-              placeholder="Task"
-              value={form.task}
-              onChange={(e) => setForm({ ...form, task: e.target.value })}
-              style={{
-                backgroundColor: '#141414',
-                color: '#ffffff',
-                border: '1px solid #2a2a2a',
-                borderRadius: '10px',
-                padding: '14px 16px',
-                fontSize: '15px',
-                outline: 'none'
-              }}
-              onFocus={(e) => e.target.style.borderColor = '#667eea'}
-              onBlur={(e) => e.target.style.borderColor = '#2a2a2a'}
-            />
-
-            <input
-              placeholder="Deadline"
-              value={form.deadline}
-              onChange={(e) => setForm({ ...form, deadline: e.target.value })}
-              style={{
-                backgroundColor: '#141414',
-                color: '#ffffff',
-                border: '1px solid #2a2a2a',
-                borderRadius: '10px',
-                padding: '14px 16px',
-                fontSize: '15px',
-                outline: 'none'
-              }}
-              onFocus={(e) => e.target.style.borderColor = '#667eea'}
-              onBlur={(e) => e.target.style.borderColor = '#2a2a2a'}
-            />
-
-            <input
-              placeholder="Reward (500 USDT)"
-              value={form.reward}
-              onChange={(e) => setForm({ ...form, reward: e.target.value })}
-              style={{
-                backgroundColor: '#141414',
-                color: '#ffffff',
-                border: '1px solid #2a2a2a',
-                borderRadius: '10px',
-                padding: '14px 16px',
-                fontSize: '15px',
-                outline: 'none'
-              }}
-              onFocus={(e) => e.target.style.borderColor = '#667eea'}
-              onBlur={(e) => e.target.style.borderColor = '#2a2a2a'}
-            />
-          </div>
-
-          <textarea
-            placeholder="Catatan tambahan..."
-            value={form.note}
-            onChange={(e) => setForm({ ...form, note: e.target.value })}
-            rows={2}
-            style={{
-              width: '100%',
-              backgroundColor: '#141414',
-              color: '#ffffff',
-              border: '1px solid #2a2a2a',
-              borderRadius: '10px',
-              padding: '14px 16px',
-              fontSize: '15px',
-              outline: 'none',
-              resize: 'vertical',
-              marginBottom: '16px',
-              fontFamily: 'inherit'
-            }}
-            onFocus={(e) => e.target.style.borderColor = '#667eea'}
-            onBlur={(e) => e.target.style.borderColor = '#2a2a2a'}
-          />
-
-          <button
-            onClick={addAirdrop}
-            style={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: '10px',
-              padding: '14px 32px',
-              fontSize: '15px',
-              fontWeight: '600',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              width: '100%'
-            }}
-            onMouseOver={(e) => e.currentTarget.style.opacity = '0.9'}
-            onMouseOut={(e) => e.currentTarget.style.opacity = '1'}
-          >
-            ➕ Tambah Airdrop
-          </button>
-        </div>
-
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: '16px',
-          marginBottom: '32px'
-        }}>
+        {/* Add Form */}
+        {showForm && (
           <div style={{
-            backgroundColor: '#0a0a0a',
-            border: '1px solid #1a1a1a',
-            borderRadius: '12px',
-            padding: '20px',
+            background: 'rgba(23, 23, 23, 0.6)',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(64, 64, 64, 0.5)',
+            borderRadius: '16px',
+            padding: '24px',
+            marginBottom: '32px'
           }}>
-            <div style={{ color: '#888888', fontSize: '13px', marginBottom: '4px' }}>Total Airdrop</div>
-            <div style={{ fontSize: '32px', fontWeight: '700' }}>{data.length}</div>
-          </div>
-          <div style={{
-            backgroundColor: '#0a0a0a',
-            border: '1px solid #1a1a1a',
-            borderRadius: '12px',
-            padding: '20px',
-          }}>
-            <div style={{ color: '#888888', fontSize: '13px', marginBottom: '4px' }}>On Going</div>
-            <div style={{ fontSize: '32px', fontWeight: '700', color: '#3b82f6' }}>
-              {data.filter(d => d.status === 'On Going').length}
+            <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '20px', color: '#e5e5e5' }}>
+              Add New Airdrop
+            </h3>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', color: '#a1a1aa', fontWeight: '500' }}>
+                  Project Name *
+                </label>
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="e.g., BaseSwap"
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    fontSize: '14px'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', color: '#a1a1aa', fontWeight: '500' }}>
+                  Category
+                </label>
+                <select
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    fontSize: '14px'
+                  }}
+                >
+                  <option>DeFi</option>
+                  <option>NFT</option>
+                  <option>Gaming</option>
+                  <option>Social</option>
+                  <option>Infrastructure</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', color: '#a1a1aa', fontWeight: '500' }}>
+                  Status
+                </label>
+                <select
+                  value={formData.status}
+                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    fontSize: '14px'
+                  }}
+                >
+                  <option>Active</option>
+                  <option>Upcoming</option>
+                  <option>Completed</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', color: '#a1a1aa', fontWeight: '500' }}>
+                  Estimated Reward
+                </label>
+                <input
+                  type="text"
+                  value={formData.reward}
+                  onChange={(e) => setFormData({ ...formData, reward: e.target.value })}
+                  placeholder="e.g., $100-500"
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    fontSize: '14px'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', color: '#a1a1aa', fontWeight: '500' }}>
+                  Deadline
+                </label>
+                <input
+                  type="date"
+                  value={formData.deadline}
+                  onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    fontSize: '14px'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', color: '#a1a1aa', fontWeight: '500' }}>
+                  URL
+                </label>
+                <input
+                  type="url"
+                  value={formData.url}
+                  onChange={(e) => setFormData({ ...formData, url: e.target.value })}
+                  placeholder="https://..."
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    fontSize: '14px'
+                  }}
+                />
+              </div>
             </div>
-          </div>
-          <div style={{
-            backgroundColor: '#0a0a0a',
-            border: '1px solid #1a1a1a',
-            borderRadius: '12px',
-            padding: '20px',
-          }}>
-            <div style={{ color: '#888888', fontSize: '13px', marginBottom: '4px' }}>Done</div>
-            <div style={{ fontSize: '32px', fontWeight: '700', color: '#10b981' }}>
-              {data.filter(d => d.status === 'Done').length}
-            </div>
-          </div>
-          <div style={{
-            backgroundColor: '#0a0a0a',
-            border: '1px solid #1a1a1a',
-            borderRadius: '12px',
-            padding: '20px',
-          }}>
-            <div style={{ color: '#888888', fontSize: '13px', marginBottom: '4px' }}>💰 Total Reward</div>
-            <div style={{ fontSize: '28px', fontWeight: '700', color: '#fbbf24' }}>
-              {totalReward > 0 ? `$${totalReward.toFixed(2)}` : '-'}
-            </div>
-          </div>
-        </div>
 
-        <div style={{
-          backgroundColor: '#0a0a0a',
-          border: '1px solid #1a1a1a',
-          borderRadius: '16px',
-          overflow: 'hidden'
-        }}>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '900px' }}>
-              <thead>
-                <tr style={{ backgroundColor: '#141414' }}>
-                  <th style={{ padding: '16px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: '#888888', textTransform: 'uppercase' }}>Nama</th>
-                  <th style={{ padding: '16px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: '#888888', textTransform: 'uppercase' }}>Status</th>
-                  <th style={{ padding: '16px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: '#888888', textTransform: 'uppercase' }}>Task</th>
-                  <th style={{ padding: '16px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: '#888888', textTransform: 'uppercase' }}>Deadline</th>
-                  <th style={{ padding: '16px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: '#888888', textTransform: 'uppercase' }}>💰 Reward</th>
-                  <th style={{ padding: '16px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: '#888888', textTransform: 'uppercase' }}>Catatan</th>
-                  <th style={{ padding: '16px', textAlign: 'center', fontSize: '13px', fontWeight: '600', color: '#888888', textTransform: 'uppercase' }}>Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.map((item) => (
-                  <tr
-                    key={item.id}
-                    style={{
-                      borderTop: '1px solid #1a1a1a',
-                      transition: 'background-color 0.2s'
-                    }}
-                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#141414'}
-                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                  >
-                    <td style={{ padding: '16px', fontWeight: '600', fontSize: '15px' }}>{item.name}</td>
-                    <td style={{ padding: '16px' }}>
-                      <select
-                        value={item.status}
-                        onChange={(e) => updateStatus(item.id, e.target.value)}
-                        style={{
-                          padding: '6px 12px',
-                          borderRadius: '20px',
-                          fontSize: '13px',
-                          fontWeight: '600',
-                          backgroundColor: item.status === 'On Going' ? '#1e3a8a' : item.status === 'Done' ? '#065f46' : '#7f1d1d',
-                          color: item.status === 'On Going' ? '#93c5fd' : item.status === 'Done' ? '#6ee7b7' : '#fca5a5',
-                          border: 'none',
-                          cursor: 'pointer',
-                          outline: 'none'
-                        }}
-                      >
-                        <option value="On Going" style={{ backgroundColor: '#141414' }}>On Going</option>
-                        <option value="Done" style={{ backgroundColor: '#141414' }}>Done</option>
-                        <option value="Dropped" style={{ backgroundColor: '#141414' }}>Dropped</option>
-                      </select>
-                    </td>
-                    <td style={{ padding: '16px', color: '#cccccc' }}>{item.task}</td>
-                    <td style={{ padding: '16px', color: '#cccccc' }}>{item.deadline}</td>
-                    <td style={{ padding: '16px' }}>
-                      {editingId === item.id ? (
-                        <input
-                          autoFocus
-                          defaultValue={item.reward}
-                          onBlur={(e) => updateReward(item.id, e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              updateReward(item.id, e.currentTarget.value);
-                            }
-                          }}
-                          style={{
-                            backgroundColor: '#141414',
-                            color: '#fbbf24',
-                            border: '1px solid #667eea',
-                            borderRadius: '6px',
-                            padding: '6px 10px',
-                            fontSize: '14px',
-                            width: '120px',
-                            outline: 'none'
-                          }}
-                        />
-                      ) : (
-                        <div
-                          onClick={() => setEditingId(item.id)}
-                          style={{
-                            color: item.reward ? '#fbbf24' : '#555555',
-                            fontWeight: '600',
-                            cursor: 'pointer',
-                            fontSize: '14px'
-                          }}
-                        >
-                          {item.reward || 'Klik untuk isi'}
-                        </div>
-                      )}
-                    </td>
-                    <td style={{ padding: '16px', color: '#888888', fontSize: '14px', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.note}</td>
-                    <td style={{ padding: '16px', textAlign: 'center' }}>
-                      <button
-                        onClick={() => deleteAirdrop(item.id)}
-                        style={{
-                          backgroundColor: 'transparent',
-                          color: '#888888',
-                          border: 'none',
-                          borderRadius: '6px',
-                          padding: '6px 12px',
-                          fontSize: '18px',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s'
-                        }}
-                        onMouseOver={(e) => {
-                          e.currentTarget.style.backgroundColor = '#7f1d1d';
-                          e.currentTarget.style.color = '#fca5a5';
-                        }}
-                        onMouseOut={(e) => {
-                          e.currentTarget.style.backgroundColor = 'transparent';
-                          e.currentTarget.style.color = '#888888';
-                        }}
-                      >
-                        🗑️
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {data.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '60px 20px', color: '#555555' }}>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔭</div>
-            <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>Belum ada airdrop</div>
-            <div style={{ fontSize: '14px' }}>Tambahkan airdrop pertama Anda di form di atas</div>
+            <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+              <button
+                onClick={addAirdrop}
+                style={{
+                  background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '10px 20px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }}
+              >
+                Save Airdrop
+              </button>
+              <button
+                onClick={() => setShowForm(false)}
+                style={{
+                  background: 'rgba(64, 64, 64, 0.5)',
+                  color: '#e5e5e5',
+                  border: '1px solid rgba(115, 115, 115, 0.3)',
+                  borderRadius: '8px',
+                  padding: '10px 20px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         )}
 
+        {/* Airdrops Grid */}
+        {data.length === 0 ? (
+          <div style={{
+            textAlign: 'center',
+            padding: '80px 20px',
+            background: 'rgba(23, 23, 23, 0.4)',
+            border: '2px dashed rgba(64, 64, 64, 0.5)',
+            borderRadius: '16px'
+          }}>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎯</div>
+            <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '8px', color: '#e5e5e5' }}>
+              No airdrops yet
+            </h3>
+            <p style={{ color: '#737373', fontSize: '14px' }}>
+              Click "Add Airdrop" to start tracking opportunities
+            </p>
+          </div>
+        ) : (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+            gap: '20px'
+          }}>
+            {data.map((item) => {
+              const colors = categoryColors[item.category] || categoryColors.DeFi;
+              return (
+                <div
+                  key={item.id}
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(23, 23, 23, 0.8) 0%, rgba(15, 15, 15, 0.8) 100%)',
+                    backdropFilter: 'blur(10px)',
+                    border: `1px solid ${colors.border}20`,
+                    borderRadius: '16px',
+                    padding: '20px',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    transition: 'all 0.3s'
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-4px)';
+                    e.currentTarget.style.borderColor = `${colors.border}40`;
+                    e.currentTarget.style.boxShadow = `0 8px 24px ${colors.border}20`;
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.borderColor = `${colors.border}20`;
+                    e.currentTarget.style.boxShadow = 'none';
+                  }}
+                >
+                  {/* Top gradient accent */}
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: '3px',
+                    background: `linear-gradient(90deg, ${colors.border} 0%, transparent 100%)`
+                  }} />
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+                    <div style={{ flex: 1 }}>
+                      <h3 style={{ fontSize: '18px', fontWeight: '700', marginBottom: '8px', color: '#ffffff' }}>
+                        {item.name}
+                      </h3>
+                      
+                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                        <span style={{
+                          background: colors.bg,
+                          color: colors.text,
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          fontSize: '11px',
+                          fontWeight: '600',
+                          border: `1px solid ${colors.border}30`
+                        }}>
+                          {item.category}
+                        </span>
+                        
+                        <span style={{
+                          background: item.status === 'Active' ? 'rgba(34, 197, 94, 0.1)' : 
+                                     item.status === 'Upcoming' ? 'rgba(59, 130, 246, 0.1)' : 
+                                     'rgba(148, 163, 184, 0.1)',
+                          color: item.status === 'Active' ? '#4ade80' : 
+                                item.status === 'Upcoming' ? '#60a5fa' : 
+                                '#94a3b8',
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          fontSize: '11px',
+                          fontWeight: '600',
+                          border: `1px solid ${item.status === 'Active' ? 'rgba(34, 197, 94, 0.3)' : 
+                                                item.status === 'Upcoming' ? 'rgba(59, 130, 246, 0.3)' : 
+                                                'rgba(148, 163, 184, 0.3)'}`
+                        }}>
+                          {item.status}
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => deleteAirdrop(item.id)}
+                      style={{
+                        background: 'rgba(239, 68, 68, 0.1)',
+                        color: '#f87171',
+                        border: '1px solid rgba(239, 68, 68, 0.2)',
+                        borderRadius: '8px',
+                        padding: '8px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseOver={(e) => {
+                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
+                      }}
+                      onMouseOut={(e) => {
+                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                      }}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '16px' }}>
+                    {item.reward && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Award size={16} style={{ color: '#fbbf24' }} />
+                        <span style={{ fontSize: '13px', color: '#d4d4d8' }}>{item.reward}</span>
+                      </div>
+                    )}
+                    
+                    {item.deadline && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Calendar size={16} style={{ color: '#94a3b8' }} />
+                        <span style={{ fontSize: '13px', color: '#d4d4d8' }}>
+                          {new Date(item.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </span>
+                      </div>
+                    )}
+
+                    {item.url && (
+                      <a
+                        href={item.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          color: '#60a5fa',
+                          textDecoration: 'none',
+                          fontSize: '13px',
+                          fontWeight: '500',
+                          marginTop: '4px',
+                          transition: 'color 0.2s'
+                        }}
+                        onMouseOver={(e) => e.currentTarget.style.color = '#93c5fd'}
+                        onMouseOut={(e) => e.currentTarget.style.color = '#60a5fa'}
+                      >
+                        <ExternalLink size={16} />
+                        Visit Project
+                      </a>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Footer */}
+        <div style={{
+          marginTop: '64px',
+          paddingTop: '24px',
+          borderTop: '1px solid rgba(64, 64, 64, 0.3)',
+          textAlign: 'center',
+          color: '#737373',
+          fontSize: '13px'
+        }}>
+          <p>
+            Built with 💙 by <span style={{ color: '#3b82f6', fontWeight: '600' }}>Jhontaslim</span>
+            {' • '}
+            <span style={{ color: '#9ca3af' }}>Top Base Builders: January 2025</span>
+          </p>
+        </div>
       </div>
     </div>
   );
