@@ -3,42 +3,33 @@
 import React, { useState, useEffect } from 'react';
 import { Trash2, Plus, ExternalLink, Award, TrendingUp, Users, Calendar } from 'lucide-react';
 
-/* ===================== TYPES ===================== */
 type Category = 'DeFi' | 'NFT' | 'Gaming' | 'Social' | 'Infrastructure';
-
+type Status = 'Active' | 'Upcoming' | 'Completed';
 
 interface Airdrop {
   id: string;
   name: string;
   category: Category;
-  status: string;
+  status: Status;
   reward: string;
   deadline: string;
   url: string;
   createdAt: string;
 }
 
-/* ===================== CONSTANTS ===================== */
-const categoryColors: Record<Category, {
-  bg: string;
-  text: string;
-  border: string;
-}> = {
-  DeFi: { bg: '#1e3a8a', text: '#93c5fd', border: '#3b82f6' },
-  NFT: { bg: '#581c87', text: '#e9d5ff', border: '#a855f7' },
-  Gaming: { bg: '#14532d', text: '#86efac', border: '#22c55e' },
-  Social: { bg: '#7c2d12', text: '#fdba74', border: '#f97316' },
-  Infrastructure: { bg: '#1e293b', text: '#94a3b8', border: '#64748b' }
-};
-
-
-
+interface FormData {
+  name: string;
+  category: Category;
+  status: Status;
+  reward: string;
+  deadline: string;
+  url: string;
+}
 
 export default function BaseAirdropTracker() {
   const [data, setData] = useState<Airdrop[]>([]);
-
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     name: '',
     category: 'DeFi',
     status: 'Active',
@@ -67,19 +58,9 @@ export default function BaseAirdropTracker() {
     
     try {
       const id = `airdrop-${Date.now()}`;
-      const newItem: Airdrop = {
-        id,
-        createdAt: new Date().toISOString(),
-        name: formData.name,
-        category: formData.category,
-        status: formData.status,
-        reward: formData.reward,
-        deadline: formData.deadline,
-        url: formData.url
-      };
-
-setData([...data, newItem]);
-
+      const newItem = { ...formData, id, createdAt: new Date().toISOString() };
+      const updatedData = [...data, newItem];
+      setData(updatedData);
       localStorage.setItem('airdrops', JSON.stringify(updatedData));
       setFormData({ name: '', category: 'DeFi', status: 'Active', reward: '', deadline: '', url: '' });
       setShowForm(false);
@@ -89,7 +70,6 @@ setData([...data, newItem]);
   };
 
   const deleteAirdrop = (id: string) => {
-
     try {
       const updatedData = data.filter(item => item.id !== id);
       setData(updatedData);
@@ -357,7 +337,7 @@ setData([...data, newItem]);
                 </label>
                 <select
                   value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value as Category })}
                   style={{
                     width: '100%',
                     padding: '10px 14px',
@@ -379,7 +359,7 @@ setData([...data, newItem]);
                 </label>
                 <select
                   value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, status: e.target.value as Status })}
                   style={{
                     width: '100%',
                     padding: '10px 14px',
